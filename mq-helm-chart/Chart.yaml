@@ -1,0 +1,10 @@
+apiVersion: v2
+name: ibm-mq-qmgr
+description: IBM MQ Queue Manager with dynamic queue configuration (no pod restart required)
+type: application
+version: 1.0.0
+appVersion: "9.3.5"
+keywords:
+  - ibm-mq
+  - queue-manager
+  - messaging

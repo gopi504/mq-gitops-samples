@@ -1,0 +1,63 @@
+# IBM MQ Queue Manager Helm Chart Values
+
+queueManager:
+  # Name of the queue manager (used for resource naming and MQSC)
+  name: qm1
+  # Kubernetes namespace to deploy into
+  namespace: mq-demo
+
+  availability:
+    # NativeHA (3-instance active/passive) or SingleInstance
+    type: NativeHA
+    updateStrategy: RollingUpdate
+
+  storage:
+    size: 2Gi
+    type: persistent-claim
+    defaultDeleteClaim: true
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  # Disable MQ channel authentication — set false in production
+  noAuth: true
+
+# TLS — set enabled: true and provide a secret with tls.key, tls.crt, ca.crt
+tls:
+  enabled: false
+  secretName: ""
+
+# Static queues: defined once at startup via the operator mqsc field.
+# Changes here require the queue manager pod to restart.
+staticQueues:
+  - name: APP.STATIC.QUEUE.1
+    replace: true
+
+# Channels defined at startup (static — requires restart to change)
+channels:
+  - name: DEV.APP.SVRCONN
+    type: SVRCONN
+    replace: true
+
+# Dynamic queues: written to a separate ConfigMap and applied live by
+# the APPLY_MQSC watcher service running inside the pod — NO pod restart needed.
+# Add or change queues here and the watcher picks up the change within 3 seconds.
+dynamicQueues:
+  - name: TEST.DYNAMIC.QUEUE.1
+    replace: true
+  - name: TEST.DYNAMIC.QUEUE.2
+    replace: true
+  - name: TEST.DYNAMIC.QUEUE.3
+    replace: true
+  - name: IBM.DEMO.Q.BOQ
+    replace: true
+  - name: IBM.DEMO.Q
+    replace: true
+    backoutQueue: IBM.DEMO.Q.BOQ
+    backoutThreshold: 3
+    maxDepth: 100000

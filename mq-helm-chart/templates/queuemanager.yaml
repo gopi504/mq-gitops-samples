@@ -1,0 +1,76 @@
+apiVersion: mq.ibm.com/v1beta1
+kind: QueueManager
+metadata:
+  name: {{ .Values.queueManager.name }}
+  namespace: {{ .Values.queueManager.namespace }}
+  labels:
+    {{- include "ibm-mq-qmgr.labels" . | nindent 4 }}
+spec:
+
+  {{- if .Values.tls.enabled }}
+  pki:
+    keys:
+      - name: certificate
+        secret:
+          items:
+            - tls.key
+            - tls.crt
+          secretName: {{ .Values.tls.secretName }}
+    trust:
+      - name: ca
+        secret:
+          items:
+            - ca.crt
+          secretName: {{ .Values.tls.secretName }}
+  {{- end }}
+
+  queueManager:
+    name: {{ include "ibm-mq-qmgr.qmgrName" . }}
+    availability:
+      type: {{ .Values.queueManager.availability.type }}
+      updateStrategy: {{ .Values.queueManager.availability.updateStrategy }}
+    storage:
+      queueManager:
+        size: {{ .Values.queueManager.storage.size }}
+        type: {{ .Values.queueManager.storage.type }}
+      defaultDeleteClaim: {{ .Values.queueManager.storage.defaultDeleteClaim }}
+    resources:
+      {{- toYaml .Values.queueManager.resources | nindent 6 }}
+    # Static MQSC: applied once at startup by the IBM MQ Operator.
+    # The APPLY_MQSC service defined here is what enables dynamic queue updates.
+    mqsc:
+      - configMap:
+          name: {{ .Values.queueManager.name }}-static-mqsc
+          items:
+            - static.mqsc
+
+  template:
+    pod:
+      volumes:
+        # Scripts ConfigMap — contains start-mqsc.sh watcher and stop-mqsc.sh
+        - name: scripts-volume
+          configMap:
+            name: {{ .Values.queueManager.name }}-scripts
+            defaultMode: 0777
+        # Dynamic MQSC ConfigMap — mounted live; watcher re-applies on change
+        - name: dynamic-mqsc-volume
+          configMap:
+            name: {{ .Values.queueManager.name }}-dynamic-mqsc
+            defaultMode: 0777
+
+      containers:
+        - name: qmgr
+          {{- if .Values.queueManager.noAuth }}
+          env:
+            - name: MQSNOAUT
+              value: 'yes'
+          {{- end }}
+          volumeMounts:
+            # Watcher scripts land at /mq-config/ (referenced in STARTCMD above)
+            - name: scripts-volume
+              mountPath: /mq-config
+              readOnly: true
+            # Dynamic MQSC lands at /dyn-mq-config-mqsc/ (read by start-mqsc.sh)
+            - name: dynamic-mqsc-volume
+              mountPath: /dyn-mq-config-mqsc
+              readOnly: true

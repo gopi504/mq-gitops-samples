@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.queueManager.name }}-dynamic-mqsc
+  namespace: {{ .Values.queueManager.namespace }}
+  labels:
+    {{- include "ibm-mq-qmgr.labels" . | nindent 4 }}
+data:
+  # Mounted at /dyn-mq-config-mqsc/dynamic.mqsc inside the qmgr pod.
+  # The APPLY_MQSC watcher service detects changes via checksum and calls
+  # runmqsc automatically — NO pod restart required.
+  #
+  # To add a queue: add an entry to values.dynamicQueues and upgrade the release.
+  # Kubernetes updates the ConfigMap in place; the watcher picks it up within ~3s.
+  dynamic.mqsc: |
+    * -------------------------------------------------------
+    * Dynamic MQSC — applied live, no queue manager restart needed
+    * -------------------------------------------------------
+    {{- range .Values.dynamicQueues }}
+    DEFINE QLOCAL({{ .name }}){{ if .backoutQueue }} BOQNAME({{ .backoutQueue }}) BOTHRESH({{ default 3 .backoutThreshold }}){{ end }}{{ if .maxDepth }} MAXDEPTH({{ .maxDepth }}){{ end }}{{ if .replace }} REPLACE{{ end }}
+    {{- end }}

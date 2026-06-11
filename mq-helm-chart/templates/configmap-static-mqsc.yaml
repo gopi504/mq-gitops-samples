@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.queueManager.name }}-static-mqsc
+  namespace: {{ .Values.queueManager.namespace }}
+  labels:
+    {{- include "ibm-mq-qmgr.labels" . | nindent 4 }}
+data:
+  # Applied once at queue manager startup via spec.queueManager.mqsc in the QueueManager CR.
+  # Changes here require the qmgr pod to restart.
+  static.mqsc: |
+    * -------------------------------------------------------
+    * Static MQSC — applied at queue manager startup
+    * -------------------------------------------------------
+
+    * Watcher service: monitors dynamic.mqsc ConfigMap and applies
+    * changes live without restarting the queue manager pod.
+    DEFINE SERVICE(APPLY_MQSC) +
+      CONTROL(QMGR) +
+      SERVTYPE(SERVER) +
+      STARTCMD('/mq-config/start-mqsc.sh') +
+      STARTARG({{ include "ibm-mq-qmgr.qmgrName" . }}) +
+      STOPCMD('/mq-config/stop-mqsc.sh') +
+      STOPARG('') +
+      STDOUT('/var/mqm/errors/apply_mqsc.out') +
+      STDERR('/var/mqm/errors/apply_mqsc.err') +
+      REPLACE
+    START SERVICE(APPLY_MQSC)
+
+    * Channels
+    {{- range .Values.channels }}
+    DEFINE CHANNEL({{ .name }}) CHLTYPE({{ .type }}){{ if .replace }} REPLACE{{ end }}
+    {{- end }}
+
+    * Static queues (require pod restart to add/remove)
+    {{- range .Values.staticQueues }}
+    DEFINE QLOCAL({{ .name }}){{ if .replace }} REPLACE{{ end }}
+    {{- end }}
