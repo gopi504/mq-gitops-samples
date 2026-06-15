@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mqqmgr.fullname" . }}-scripts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mqqmgr.labels" . | nindent 4 }}
+data:
+  start-mqsc.sh: |
+    #!/bin/bash
+    cksum=""
+    while true; do
+      tmpCksum=$(cksum /dyn-mq-config-mqsc/dynamic.mqsc | cut -d" " -f1)
+      if (( tmpCksum != cksum )); then
+        cksum=$tmpCksum
+        echo "Applying MQSC"
+        runmqsc $1 < /dyn-mq-config-mqsc/dynamic.mqsc
+      else
+        sleep 3
+      fi
+    done
+  stop-mqsc.sh: |
+    #!/bin/bash
+    echo "done"

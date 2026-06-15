@@ -1,0 +1,56 @@
+# =============================================================================
+# Overlay for QM3 (Dev Team B scope). Hybrid: mTLS clients + LDAP console.
+#   helm install qm3 ./mq-qmgr-rbac -n mq-prod -f examples/qm3-values.yaml
+# =============================================================================
+clientAuth: certificate
+
+queueManager:
+  name: QM3
+  version: "9.4.0.0-r2"
+
+tls:
+  keySecret: qm3-mq-tls
+  caIssuerDN: "CN=ExampleIssuingCA,OU=PKI,O=YourOrg"
+
+web:
+  enabled: true
+  routeEnabled: true
+
+access:
+  platformTeams:
+    - group: OPS_MQ_RW
+      mcUser: opsmq
+      access: readwrite
+      queuePrefix: "**"
+      sslPeer: "CN=ops-mq,OU=platform,O=YourOrg"
+    - group: ENG_MQ_RO
+      mcUser: engmq
+      access: readonly
+      queuePrefix: "**"
+      sslPeer: "CN=eng-mq,OU=platform,O=YourOrg"
+  teams:
+    - group: DEVTEAMB
+      mcUser: devteamb
+      access: readwrite
+      queuePrefix: "APP.**"
+      channel: MQ.ADMIN.SVRCONN
+      sslPeer: "CN=devteamb,OU=team-b,O=YourOrg"
+    - group: DEVTEAMA
+      access: none
+      channel: MQ.ADMIN.SVRCONN
+      sslPeer: "CN=devteama,OU=team-a,O=YourOrg"
+
+mq-webconsole:
+  registry: ldap
+  consoleRoles:
+    admin:         [ OPS_MQ_RW ]
+    adminReadOnly: [ ENG_MQ_RO, DEVTEAMB ]   # Team B: read-only console on QM3+QM4
+    user:          [ ]
+  federation:
+    enabled: true
+    remoteQueueManagers:
+      - qmgrName: QM4
+        uniqueName: QM4-prod
+        channel: MQ.ADMIN.SVRCONN
+        connectionName: "qm4-ibm-mq.mq-prod.svc(1414)"
+        username: consolesvc

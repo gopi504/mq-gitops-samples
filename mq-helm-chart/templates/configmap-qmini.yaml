@@ -1,0 +1,12 @@
+{{- if eq .Values.clientAuth "certificate" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mqqmgr.fullname" . }}-qmini
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mqqmgr.labels" . | nindent 4 }}
+data:
+  qm.ini: |
+    {{- include "mqqmgr.qmini" . | nindent 4 }}
+{{- end }}

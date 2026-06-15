@@ -1,0 +1,120 @@
+{{- $wc := index .Values "mq-webconsole" -}}
+apiVersion: mq.ibm.com/v1beta1
+kind: QueueManager
+metadata:
+  name: {{ include "mqqmgr.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mqqmgr.labels" . | nindent 4 }}
+spec:
+  license:
+    accept: {{ .Values.queueManager.license.accept }}
+    license: {{ .Values.queueManager.license.license | quote }}
+    use: {{ .Values.queueManager.license.use | quote }}
+  {{- with .Values.queueManager.version }}
+  version: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  queueManager:
+    name: {{ .Values.queueManager.name | quote }}
+    {{- with .Values.queueManager.image.repository }}
+    image: {{ . | quote }}
+    imagePullPolicy: {{ $.Values.queueManager.image.pullPolicy | default "IfNotPresent" }}
+    {{- end }}
+    availability:
+      type: {{ .Values.queueManager.availability.type | quote }}
+    {{- with .Values.queueManager.storage }}
+    storage:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.queueManager.resources }}
+    resources:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- if eq .Values.clientAuth "certificate" }}
+    ini:
+      - configMap:
+          name: {{ include "mqqmgr.fullname" . }}-qmini
+          items:
+            - qm.ini
+    {{- end }}
+    mqsc:
+      - configMap:
+          name: {{ include "mqqmgr.fullname" . }}-mqsc
+          items:
+            {{- if or (eq .Values.clientAuth "certificate") .Values.connAuth.enabled }}
+            - 00-connauth.mqsc
+            {{- end }}
+            - 10-channels.mqsc
+            - 20-chlauth.mqsc
+            - 30-authrec.mqsc
+            - 40-service.mqsc
+  {{- if .Values.tls.enabled }}
+  pki:
+    keys:
+      - name: default
+        secret:
+          secretName: {{ .Values.tls.keySecret | quote }}
+          items:
+            - tls.key
+            - tls.crt
+            {{- if .Values.tls.caInKey }}
+            - ca.crt
+            {{- end }}
+    {{- with .Values.tls.trustSecret }}
+    trust:
+      - name: app
+        secret:
+          secretName: {{ . | quote }}
+          items:
+            - ca.crt
+    {{- end }}
+  {{- end }}
+  web:
+    enabled: {{ .Values.web.enabled }}
+    {{- if .Values.web.enabled }}
+    console:
+      authentication:
+        provider: manual
+      authorization:
+        provider: manual
+    manualConfig:
+      configMap:
+        name: {{ include "mqqmgr.consolePrefix" . }}-mqwebuser
+    route:
+      enabled: {{ .Values.web.routeEnabled }}
+    {{- end }}
+  template:
+    pod:
+      volumes:
+        - name: scripts-volume
+          configMap:
+            name: {{ include "mqqmgr.fullname" . }}-scripts
+            defaultMode: 0777
+        - name: dynamic-mqsc-volume
+          configMap:
+            name: {{ include "mqqmgr.fullname" . }}-dynamic-mqsc
+            defaultMode: 0777
+        {{- if and .Values.web.enabled $wc.enabled $wc.federation.enabled }}
+        - name: federation
+          configMap:
+            name: {{ include "mqqmgr.consolePrefix" . }}-federation
+            defaultMode: 0755
+        {{- end }}
+      containers:
+        - name: qmgr
+          volumeMounts:
+            - name: scripts-volume
+              mountPath: /mq-config
+              readOnly: true
+            - name: dynamic-mqsc-volume
+              mountPath: /dyn-mq-config-mqsc
+              readOnly: true
+            {{- if and .Values.web.enabled $wc.enabled $wc.federation.enabled }}
+            - name: federation
+              mountPath: /etc/mqm/federation
+              readOnly: true
+            {{- end }}

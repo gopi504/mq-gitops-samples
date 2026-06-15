@@ -1,0 +1,139 @@
+# =============================================================================
+# mq-qmgr-rbac — values.yaml  (v0.2: console/federation delegated to subchart)
+# Model: ONE release == ONE queue manager. Use for NEW queue-manager creations.
+#
+# This chart owns:  queue manager + client auth (mTLS/LDAP) + RBAC (CHLAUTH/OAM)
+# Subchart owns:    web console login + federated "common UI"  (mq-webconsole:)
+# =============================================================================
+# =============================================================================
+# Dynamic queues — added/updated live without restarting the queue manager.
+# Add entries here and run "helm upgrade" — no pod restart occurs.
+# =============================================================================
+dynamicQueues:
+  - name: APP.QUEUE.1
+  - name: APP.QUEUE.2
+
+clientAuth: certificate          # certificate | ldap  (how CLIENTS authenticate)
+
+fullnameOverride: ""
+nameOverride: ""
+
+imagePullSecrets:
+  - name: ibm-entitlement-key
+
+queueManager:
+  name: QM1
+  license:
+    accept: true
+    license: L-CYM2-QValid
+    use: Production
+  version: "9.4.0.0-r2"          # >= 9.2.1 required for UserExternal
+  image:
+    repository: ""
+    pullPolicy: IfNotPresent
+  availability:
+    type: NativeHA
+  storage:
+    defaultClass: ocs-storagecluster-ceph-rbd
+    queueManager:
+      type: persistent-claim
+      size: 2Gi
+    persistedData:
+      enabled: true
+      size: 2Gi
+    recoveryLogs:
+      enabled: true
+      size: 2Gi
+  resources:
+    limits:   { cpu: "1",   memory: 2Gi }
+    requests: { cpu: 500m,  memory: 1Gi }
+
+tls:
+  enabled: true
+  keySecret: qm1-mq-tls
+  trustSecret: mq-ca-trust
+  caInKey: false
+  caIssuerDN: "CN=ExampleIssuingCA,OU=PKI,O=YourOrg"
+
+# Console enablement on the QM CR (spec.web). Config comes from mq-webconsole.
+web:
+  enabled: true
+  routeEnabled: true
+
+channels:
+  tls:
+    cipher: ANY_TLS12_OR_HIGHER
+  serverConnection:
+    - name: MQ.ADMIN.SVRCONN
+
+# LDAP for the QUEUE MANAGER — only used when clientAuth: ldap (console LDAP is
+# configured separately under mq-webconsole.ldap).
+ldap:
+  host: ad.example.com
+  port: 636
+  sslEnabled: true
+  baseDN: "dc=example,dc=com"
+  bindDN: "cn=mqbind,ou=svc,dc=example,dc=com"
+  shortUser: sAMAccountName
+  bindPasswordEncoded: "{xor}REPLACE_ME"
+
+connAuth:                         # used only when clientAuth: ldap
+  checkClient: REQUIRED
+  adoptContext: true
+  bindPasswordPlain: "REPLACE_ME"
+
+# Client access matrix — the real boundary for application clients on this QM.
+access:
+  platformTeams:
+    - group: OPS_MQ_RW
+      mcUser: opsmq
+      access: readwrite
+      queuePrefix: "**"
+      sslPeer: "CN=ops-mq,OU=platform,O=YourOrg"
+    - group: ENG_MQ_RO
+      mcUser: engmq
+      access: readonly
+      queuePrefix: "**"
+      sslPeer: "CN=eng-mq,OU=platform,O=YourOrg"
+  teams:
+    - group: DEVTEAMA
+      mcUser: devteama
+      access: readwrite
+      queuePrefix: "APP.**"
+      channel: MQ.ADMIN.SVRCONN
+      sslPeer: "CN=devteama,OU=team-a,O=YourOrg"
+    - group: DEVTEAMB
+      access: none
+      channel: MQ.ADMIN.SVRCONN
+      sslPeer: "CN=devteamb,OU=team-b,O=YourOrg"
+
+# =============================================================================
+# SUBCHART: web console login + federated common UI
+# =============================================================================
+mq-webconsole:
+  enabled: true
+  # nameOverride: ""   # leave empty -> matches QM CR name (release name)
+  registry: ldap                 # ldap | basic
+  ldap:
+    host: ad.example.com
+    port: 636
+    sslEnabled: true
+    baseDN: "dc=example,dc=com"
+    bindDN: "cn=mqbind,ou=svc,dc=example,dc=com"
+    bindPasswordEncoded: "{xor}REPLACE_ME"
+  consoleRoles:
+    admin:         [ OPS_MQ_RW ]
+    adminReadOnly: [ ENG_MQ_RO ]
+    user:          [ ]
+  basicUsers:
+    - name: mqadmin
+      passwordEncoded: "{xor}REPLACE_ME_ADMIN"
+      role: admin
+  federation:
+    enabled: true
+    remoteQueueManagers:
+      - qmgrName: QM2
+        uniqueName: QM2-prod
+        channel: MQ.ADMIN.SVRCONN
+        connectionName: "qm2-ibm-mq.mq-prod.svc(1414)"
+        username: consolesvc

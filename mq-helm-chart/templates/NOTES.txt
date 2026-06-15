@@ -1,0 +1,45 @@
+{{- $full := include "mqqmgr.fullname" . -}}
+{{- $cert := eq .Values.clientAuth "certificate" -}}
+{{- $wc := index .Values "mq-webconsole" -}}
+IBM MQ "{{ .Values.queueManager.name }}" applied as release "{{ .Release.Name }}".
+  client auth : {{ .Values.clientAuth }}{{ if $cert }}  (mTLS, UserExternal, OAM by PRINCIPAL, CONNAUTH off){{ end }}
+  console auth: {{ $wc.registry }}
+
+1) Watch it start:
+   oc get qmgr {{ $full }} -n {{ .Release.Namespace }} -w
+
+2) Console URL:
+   echo "https://$(oc get route {{ $full }}-ibm-mq-web -n {{ .Release.Namespace }} -o jsonpath='{.spec.host}')/ibmmq/console"
+{{- if eq $wc.registry "ldap" }}
+   Login: AD credentials. Roles by group ->
+     MQWebAdmin   : {{ join ", " $wc.consoleRoles.admin }}
+     MQWebAdminRO : {{ join ", " $wc.consoleRoles.adminReadOnly }}
+{{- else }}
+   Login: basic registry ->
+{{- range $wc.basicUsers }}
+     - {{ .name }} ({{ .role }})
+{{- end }}
+{{- end }}
+
+3) Client access on THIS queue manager (OAM + CHLAUTH):
+{{- range .Values.access.platformTeams }}
+   - {{ if $cert }}{{ .mcUser }}{{ else }}{{ .group }}{{ end }}: {{ .access }} (queues {{ .queuePrefix | default "**" }})  [cert {{ .sslPeer }}]
+{{- end }}
+{{- range .Values.access.teams }}
+   - {{ if $cert }}{{ .mcUser | default "(none)" }}{{ else }}{{ .group }}{{ end }}: {{ .access }}{{ if .sslPeer }}  [cert {{ .sslPeer }}]{{ end }}
+{{- end }}
+
+{{- if and $wc.enabled $wc.federation.enabled }}
+
+4) Common UI — federation runs once on the active pod:
+     ACTIVE=$(oc get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ $full }} \
+       -o jsonpath='{.items[?(@.status.containerStatuses[0].ready==true)].metadata.name}' | awk '{print $1}')
+     REMOTE_MQ_PW=*** oc exec "$ACTIVE" -n {{ .Release.Namespace }} -- \
+       bash -c 'REMOTE_MQ_PW='"$REMOTE_MQ_PW"' bash /etc/mqm/federation/federation.sh'
+{{- end }}
+
+Reminders:
+  * Console (mq-webconsole) and client auth are independent. Console roles
+    MQWebAdmin/MQWebAdminRO run as the server identity (no QM authrec needed).
+  * The QM truststore (tls.trustSecret -> ca.crt) must hold the CA that signs
+    client certs. The mqweb LDAPS trust (AD CA) is separate.
