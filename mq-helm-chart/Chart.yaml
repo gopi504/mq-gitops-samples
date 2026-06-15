@@ -1,10 +1,15 @@
 apiVersion: v2
-name: ibm-mq-qmgr
-description: IBM MQ Queue Manager with dynamic queue configuration (no pod restart required)
+name: mq-qmgr-rbac
+description: >-
+  IBM MQ queue manager (IBM MQ Operator on OpenShift) with team-based, per-QM
+  RBAC. Client auth via mTLS (UserExternal) or LDAP. The web console + federated
+  "common UI" are delivered by the mq-webconsole subchart.
 type: application
-version: 1.0.0
-appVersion: "9.3.5"
-keywords:
-  - ibm-mq
-  - queue-manager
-  - messaging
+version: 0.2.0
+appVersion: "9.4"
+keywords: [ibm-mq, openshift, mqweb, rbac]
+dependencies:
+  - name: mq-webconsole
+    version: "0.1.0"
+    repository: "file://charts/mq-webconsole"
+    condition: mq-webconsole.enabled

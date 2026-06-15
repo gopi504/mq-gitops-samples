@@ -1,14 +1,11 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Values.queueManager.name }}-scripts
-  namespace: {{ .Values.queueManager.namespace }}
+  name: {{ include "mqqmgr.fullname" . }}-scripts
+  namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "ibm-mq-qmgr.labels" . | nindent 4 }}
+    {{- include "mqqmgr.labels" . | nindent 4 }}
 data:
-  # Watches /dyn-mq-config-mqsc/dynamic.mqsc via checksum every 3 seconds.
-  # Re-applies MQSC to the live queue manager when the ConfigMap changes.
-  # Runs as MQ Service APPLY_MQSC (CONTROL(QMGR)) so it starts with the qmgr.
   start-mqsc.sh: |
     #!/bin/bash
     cksum=""
@@ -16,13 +13,12 @@ data:
       tmpCksum=$(cksum /dyn-mq-config-mqsc/dynamic.mqsc | cut -d" " -f1)
       if (( tmpCksum != cksum )); then
         cksum=$tmpCksum
-        echo "$(date) Applying MQSC from dynamic.mqsc"
+        echo "Applying MQSC"
         runmqsc $1 < /dyn-mq-config-mqsc/dynamic.mqsc
       else
         sleep 3
       fi
     done
-
   stop-mqsc.sh: |
     #!/bin/bash
     echo "done"

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: mq-webconsole
+description: >-
+  IBM MQ web console (mqweb) configuration and the federated "common UI"
+  bootstrap, packaged as a config-only subchart. Renders the mqwebuser.xml
+  ConfigMap and the setmqweb-remote federation script ConfigMap. The console
+  itself runs inside the queue-manager pod (IBM MQ Operator), so the parent
+  QueueManager CR references these ConfigMaps by name.
+type: application
+version: 0.1.0
+appVersion: "9.4"
+keywords:
+  - ibm-mq
+  - mqweb
+  - console
+  - federation

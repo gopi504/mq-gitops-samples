@@ -1,0 +1,12 @@
+{{- if and .Values.enabled .Values.federation.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mq-webconsole.fullname" . }}-federation
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mq-webconsole.labels" . | nindent 4 }}
+data:
+  federation.sh: |
+    {{- include "mq-webconsole.federation.sh" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,49 @@
+# =============================================================================
+# mq-webconsole — values.yaml  (config-only subchart)
+#
+# Renders two ConfigMaps the parent QueueManager CR references:
+#   <name>-mqwebuser   -> spec.web.manualConfig.configMap.name
+#   <name>-federation  -> mounted into the pod for the common/federated UI
+# where <name> = nameOverride (or, if empty, the Helm release name).
+# As a subchart, set these values under the `mq-webconsole:` key in the parent.
+# =============================================================================
+enabled: true
+
+# Must match your QueueManager CR's metadata.name so the names line up.
+# Leave empty to default to .Release.Name (the one-QM-per-release pattern).
+nameOverride: ""
+fullnameOverride: ""
+
+# How humans authenticate to the console (independent of client auth).
+registry: ldap                   # ldap | basic
+
+ldap:
+  host: ad.example.com
+  port: 636
+  sslEnabled: true               # mqweb keystore must trust the AD CA for LDAPS
+  baseDN: "dc=example,dc=com"
+  bindDN: "cn=mqbind,ou=svc,dc=example,dc=com"
+  bindPasswordEncoded: "{xor}REPLACE_ME"   # securityUtility encode --encoding=hash
+
+# registry: ldap  -> AD groups bound to console roles (run as server identity).
+consoleRoles:
+  admin:         [ OPS_MQ_RW ]   # MQWebAdmin   (read-write)
+  adminReadOnly: [ ENG_MQ_RO ]   # MQWebAdminRO (read-only)
+  user:          [ ]             # MQWebUser (asserts user to QM; needs PRINCIPAL authrecs)
+
+# registry: basic -> local users. role: admin | adminReadOnly | user
+basicUsers:
+  - name: mqadmin
+    passwordEncoded: "{xor}REPLACE_ME_ADMIN"
+    role: admin
+
+# Federation = the "common UI": this console federates these remote QMs.
+federation:
+  enabled: true
+  keystorePath: /run/runmqserver/tls/key.jks   # in-pod path used by setmqweb
+  remoteQueueManagers:
+    - qmgrName: QM2
+      uniqueName: QM2-prod
+      channel: MQ.ADMIN.SVRCONN
+      connectionName: "qm2-ibm-mq.mq-prod.svc(1414)"
+      username: consolesvc

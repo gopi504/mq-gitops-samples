@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mqqmgr.fullname" . }}-mqsc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mqqmgr.labels" . | nindent 4 }}
+data:
+{{- if or (eq .Values.clientAuth "certificate") .Values.connAuth.enabled }}
+  00-connauth.mqsc: |
+    {{- include "mqqmgr.mqsc.connauth" . | nindent 4 }}
+{{- end }}
+  10-channels.mqsc: |
+    {{- include "mqqmgr.mqsc.channels" . | nindent 4 }}
+  20-chlauth.mqsc: |
+    {{- include "mqqmgr.mqsc.chlauth" . | nindent 4 }}
+  30-authrec.mqsc: |
+    {{- include "mqqmgr.mqsc.authrec" . | nindent 4 }}
+  40-service.mqsc: |
+    {{- include "mqqmgr.mqsc.dynamicservice" . | nindent 4 }}
