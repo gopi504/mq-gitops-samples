@@ -35,6 +35,7 @@ queueManager:
     type: NativeHA
   storage:
     defaultClass: ocs-storagecluster-ceph-rbd
+    defaultDeleteClaim: true        # delete PVCs when QueueManager CR is deleted
     queueManager:
       type: persistent-claim
       size: 2Gi
