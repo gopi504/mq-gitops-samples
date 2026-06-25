@@ -8,13 +8,49 @@ metadata:
 data:
   start-mqsc.sh: |
     #!/bin/bash
+    QMGR="$1"
+    DYN_FILE="/dyn-mq-config-mqsc/dynamic.mqsc"
+    PREV_FILE="/tmp/dynamic-prev.mqsc"
     cksum=""
+
+    extract_queues() {
+      grep -i '^DEFINE QLOCAL' "$1" 2>/dev/null | \
+        sed 's/.*QLOCAL(\([^ )]*\)).*/\1/' | sort -u
+    }
+
+    touch "$PREV_FILE"
+
     while true; do
-      tmpCksum=$(cksum /dyn-mq-config-mqsc/dynamic.mqsc | cut -d" " -f1)
+      tmpCksum=$(cksum "$DYN_FILE" | cut -d" " -f1)
+
       if (( tmpCksum != cksum )); then
         cksum=$tmpCksum
-        echo "Applying MQSC"
-        runmqsc $1 < /dyn-mq-config-mqsc/dynamic.mqsc
+
+        extract_queues "$DYN_FILE"  > /tmp/queues-new.txt
+        extract_queues "$PREV_FILE" > /tmp/queues-old.txt
+
+        ADDED=$(comm -23 /tmp/queues-new.txt /tmp/queues-old.txt)
+        REMOVED=$(comm -13 /tmp/queues-new.txt /tmp/queues-old.txt)
+
+        if [ -n "$ADDED" ]; then
+          echo "Creating queues: $ADDED"
+          for q in $ADDED; do
+            echo "DEFINE QLOCAL($q) REPLACE" | runmqsc "$QMGR"
+          done
+        fi
+
+        if [ -n "$REMOVED" ]; then
+          echo "Deleting queues: $REMOVED"
+          for q in $REMOVED; do
+            echo "DELETE QLOCAL($q)" | runmqsc "$QMGR"
+          done
+        fi
+
+        if [ -z "$ADDED" ] && [ -z "$REMOVED" ]; then
+          echo "No queue changes detected"
+        fi
+
+        cp "$DYN_FILE" "$PREV_FILE"
       else
         sleep 3
       fi
